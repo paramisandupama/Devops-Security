@@ -1,0 +1,91 @@
+IE3142 - exploit evidence: HARDENED APPLICATION
+target   : http://localhost:3001
+baseline : /home/user/ie3142-devsecops/repo/app/lib/insecurity.ts
+date     : 2026-09-30 09:52:07Z
+node     : v22.14.0
+
+
+[*] Target              : http://localhost:3001
+[*] Injection payload   : email = "' or 1=1--"
+[*] Baseline /api/Users (no credentials): HTTP 401
+
+[1m==============================================================================[0m
+[1mV1 - SQL Injection - authentication bypass[0m  [33m(CWE-89)[0m
+[1mTarget:[0m http://localhost:3001
+[1m==============================================================================[0m
+  POST /rest/user/login  -> HTTP 401
+  Response: Invalid email or password.
+  Control: legitimate login admin@juice-sh.op / admin123 -> HTTP 200 (still works)
+  Control: GET /api/Users with no credentials -> HTTP 401 (endpoint still requires auth)
+
+[32m[1m  >>> BLOCKED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Target            : http://localhost:3001
+[*] UNION payload     : q = ')) UNION SELECT id, email, password, role, '', '', '', '', '' FROM Users--
+
+[1m==============================================================================[0m
+[1mV2 - UNION SQL Injection - credential exfiltration[0m  [33m(CWE-89)[0m
+[1mTarget:[0m http://localhost:3001
+[1m==============================================================================[0m
+  GET /rest/products/search -> HTTP 200
+  Rows returned          : 0
+  E-mail addresses read  : 0
+  MD5 password hashes    : 0
+  Control: /rest/products/search?q=apple -> HTTP 200, 3 products
+
+[32m[1m  >>> BLOCKED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Internal-only service listening on 127.0.0.1:9999
+[*] Asking the server to fetch : http://127.0.0.1:9999/internal/admin-backup.png
+
+[1m==============================================================================[0m
+[1mV3 - Server-Side Request Forgery - avatar URL[0m  [33m(CWE-918)[0m
+[1mTarget:[0m http://localhost:3001
+[1m==============================================================================[0m
+  POST /profile/image/url -> HTTP 500
+  Image URL submitted     : http://127.0.0.1:9999/internal/admin-backup.png
+  Requests received by the internal service : 0
+  Control: public HTTPS image -> HTTP 302 (avatar update still functions)
+
+[32m[1m  >>> BLOCKED[0m
+[1m==============================================================================[0m
+
+
+
+[1m==============================================================================[0m
+[1mV4 - Broken Object Level Authorization - basket[0m  [33m(CWE-639)[0m
+[1mTarget:[0m http://localhost:3001
+[1m==============================================================================[0m
+  Alice (victim)  basket id : 7
+  Bob   (attacker) basket id : 8
+  Alice GET /rest/basket/7      -> HTTP 200 (own basket, 2 products)
+  Bob   GET /rest/basket/7      -> HTTP 403
+  Bob saw 0 product(s) belonging to Alice
+  Control: Bob GET /rest/basket/8      -> HTTP 200 (his own basket still readable)
+
+[32m[1m  >>> BLOCKED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Target             : http://localhost:3001
+[*] Source inspected   : /home/user/ie3142-devsecops/repo/app/lib/insecurity.ts
+
+[1m==============================================================================[0m
+[1mV5 - Hard-coded RSA private key - admin token forgery[0m  [33m(CWE-798)[0m
+[1mTarget:[0m http://localhost:3001
+[1m==============================================================================[0m
+  No hard-coded private key found in insecurity.ts
+  The key is injected at runtime; there is nothing to steal from the repository.
+  GET /api/Users with no credentials -> HTTP 401
+
+[32m[1m  >>> BLOCKED[0m
+[1m==============================================================================[0m
+
+

