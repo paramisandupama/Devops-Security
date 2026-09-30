@@ -1,0 +1,81 @@
+# =============================================================================
+# Optional overlay: HashiCorp Vault injects the JWT signing key at RUNTIME.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vault.yml up --build
+#
+# What happens:
+#   1. vault       starts in dev mode on the internal "backend" network.
+#   2. vault-init  enables kv-v2, stores the PEM, enables AppRole, creates a
+#                  least-privilege policy and writes the resulting role-id /
+#                  secret-id to the shared "vault-creds" volume.
+#   3. api         starts with SECRET_PROVIDER=vault. Its entrypoint logs in
+#                  with AppRole, reads secret/data/juice-shop, exports
+#                  JWT_PRIVATE_KEY into the process environment and execs node.
+#
+# Nothing secret is written to the repository: the Vault root token lives in
+# .env (git-ignored) and the PEM lives in ./secrets (git-ignored).
+# =============================================================================
+
+services:
+
+  api:
+    environment:
+      SECRET_PROVIDER: vault
+      VAULT_ADDR: "${VAULT_ADDR:-http://vault:8200}"
+      VAULT_KV_MOUNT: "${VAULT_KV_MOUNT:-secret}"
+      VAULT_SECRET_PATH: "${VAULT_SECRET_PATH:-juice-shop}"
+      VAULT_ROLE_ID_FILE: /run/vault/role_id
+      VAULT_SECRET_ID_FILE: /run/vault/secret_id
+    volumes:
+      - juice-shop-data:/juice-shop/data
+      - vault-creds:/run/vault:ro
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - frontend
+      - backend
+
+  vault:
+    image: hashicorp/vault:1.18
+    container_name: ie3142-vault
+    restart: unless-stopped
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "${VAULT_TOKEN:?set VAULT_TOKEN in .env}"
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: "http://127.0.0.1:8200"
+    cap_add:
+      - IPC_LOCK
+    command: ["vault", "server", "-dev"]
+    expose:
+      - "8200"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  vault-init:
+    image: hashicorp/vault:1.18
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: "${VAULT_ADDR:-http://vault:8200}"
+      VAULT_TOKEN: "${VAULT_TOKEN:?set VAULT_TOKEN in .env}"
+    secrets:
+      - jwt_private_key
+    volumes:
+      - vault-creds:/run/vault
+      - ./vault:/vault:ro
+    entrypoint:
+      - /bin/sh
+      - /vault/seed.sh
+    networks:
+      - backend
+
+volumes:
+  vault-creds:
+    driver: local

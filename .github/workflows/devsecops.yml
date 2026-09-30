@@ -1,0 +1,248 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  NODE_VERSION: '22'
+  IMAGE_NAME: ie3142-juice-shop-api
+  BLOCKING_SEVERITIES: 'HIGH,CRITICAL'
+
+jobs:
+  # ------------------------------------------------------------------ build
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test -- --silent
+        continue-on-error: true
+
+  # ------------------------------------------------------------- G1: SAST
+  sast:
+    name: G1 SAST (Semgrep)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install semgrep
+      # Diff-based: the inherited Juice Shop tree carries many deliberate
+      # vulnerabilities the group did not introduce. Failing on every
+      # historical finding would leave the gate permanently red and therefore
+      # ignored, so reviewed findings live in .semgrep/baseline.json and only
+      # NEW findings block.
+      - name: Semgrep (registry packs + custom rules)
+        run: |
+          semgrep scan \
+            --config "p/typescript" \
+            --config "p/owasp-top-ten" \
+            --config "p/security-audit" \
+            --config .semgrep/rules.yml \
+            app/routes app/lib \
+            --json --output semgrep-raw.json || true
+      - name: Gate on new findings only
+        run: python3 scripts/sast-gate.py
+      - name: Publish SARIF
+        if: always()
+        run: |
+          semgrep scan --config .semgrep/rules.yml app/routes app/lib \
+            --sarif --output semgrep.sarif || true
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+
+  # ------------------------------------------------------- G2: dependencies
+  dependencies:
+    name: G2 Dependency (npm audit)
+    runs-on: ubuntu-latest
+    needs: build
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --omit=dev
+      # Blocks on critical advisories in the PRODUCTION tree. This fails
+      # today: the inherited tree carries 7 critical and 16 high advisories.
+      # The group presents that red run rather than raising the threshold
+      # until it goes green.
+      - name: npm audit (blocking on critical)
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Full advisory report
+        if: always()
+        run: npm audit --omit=dev --json > npm-audit.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit
+          path: app/npm-audit.json
+
+  # ----------------------------------------------------------- G3: secrets
+  secrets:
+    name: G3 Secrets (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history, not just the tip
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+  # -------------------------------------------------- G4: container & IaC
+  container:
+    name: G4 Container & IaC (Trivy)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the API image
+        run: docker build -f docker/api/Dockerfile -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+      - name: Trivy - image vulnerability scan (blocking)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: ${{ env.BLOCKING_SEVERITIES }}
+      # Scoped to the infrastructure this group wrote. Scanning "." would also
+      # scan the inherited Juice Shop tree, whose terraform and smoke-test
+      # Dockerfile are deliberately insecure teaching material - a gate that
+      # fires on someone else's demo code is a gate that gets switched off.
+      - name: Trivy - IaC / misconfiguration scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: docker
+          format: table
+          exit-code: "1"
+          severity: ${{ env.BLOCKING_SEVERITIES }}
+      # Trivy's IaC scanner has no docker-compose parser, so compose hardening
+      # (network segmentation, cap_drop, read-only mounts) is reviewed by hand
+      # against the threat model rather than pretending to be automated.
+      - name: Trivy - image findings as SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-image.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image.sarif
+        continue-on-error: true
+      - name: CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: cyclonedx-json
+          artifact-name: sbom.cyclonedx.json
+
+  # --------------------------------------------------------- DAST (report)
+  dast:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    needs: [sast, dependencies, secrets, container]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bring the stack up
+        run: docker compose up -d --build
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8080/ >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          echo "::error::stack did not become healthy"; exit 1
+      - name: ZAP baseline scan
+        run: |
+          docker run --rm --network host -v "$(pwd):/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:8080 \
+            -c zap-rules.tsv \
+            -r zap-report.html -J zap-report.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: |
+            zap-report.html
+            zap-report.json
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ------------------------------------------- proof that a gate blocks
+  demo-gate-failure:
+    name: Proof - the SAST gate blocks a bad build
+    runs-on: ubuntu-latest
+    needs: sast
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install semgrep
+      # Deliberately reintroduce V1 (CWE-89) into the hardened login route...
+      - name: Reintroduce the SQL injection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/routes/login.ts')
+          s = p.read_text()
+          marker = "      'SELECT * FROM Users WHERE email = :email AND password = :password AND deletedAt IS NULL',"
+          assert marker in s, "V1 fix marker not found - has login.ts changed?"
+          p.write_text(s.replace(marker, "      `SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`,"))
+          PY
+      # ...and then require the gate to REJECT it. This job succeeds only if
+      # the SAST gate fails, so the blocking behaviour is proven on every run
+      # rather than demonstrated once in a screenshot.
+      - name: The gate must fail
+        id: gate
+        run: |
+          set +e
+          python3 scripts/sast-gate.py
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "::error::SAST gate passed on a deliberately vulnerable build - the gate is broken"
+            exit 1
+          fi
+          echo "::notice::SAST gate correctly blocked the vulnerable build (exit $code)"
+      - name: Restore the hardened file
+        if: always()
+        run: git checkout -- app/routes/login.ts

@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Gitleaks configuration - secrets scanning gate (G3).
+#
+# Philosophy: the same as the SAST gate. This repository inherits the whole of
+# OWASP Juice Shop, which deliberately ships hard-coded sample credentials,
+# forged JWTs and a "leaked key" IaC challenge as part of its teaching
+# material. Scanning that tree produces findings that are neither ours nor
+# real, and a gate that always fires is a gate that gets switched off.
+#
+# So inherited demo content is allowlisted BY PATH, with the reason recorded
+# here, and everything the group actually wrote - docker/, scripts/, poc/,
+# vault/, .github/, docs/, evidence/ - is scanned with the full default rule
+# set plus the project rules below. A secret introduced into our own code
+# fails the build.
+#
+# Reviewed 2026-09-30 by all four members.
+# ---------------------------------------------------------------------------
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Inherited upstream demo material and non-source artefacts"
+paths = [
+  # --- Juice Shop's own test fixtures: forged JWTs, sample passwords -------
+  '''(^|/)app/test/.*''',
+  '''(^|/)app/frontend/src/.*\.spec\.ts$''',
+
+  # --- Juice Shop's demo dataset and static challenge content --------------
+  '''(^|/)app/data/static/.*''',
+
+  # --- The intentional "leaked key in IaC" teaching challenge --------------
+  '''(^|/)app/(infrastructure/)?terraform/.*''',
+
+  # --- Challenge scaffolding: compares submitted credentials against the ---
+  # --- app's own PUBLISHED sample passwords to mark challenges solved.  ----
+  # --- Not a secret we introduced; upstream ships it deliberately. ---------
+  '''(^|/)app/routes/login\.ts$''',
+
+  # --- Public Ethereum contract addresses in the faucet demo. On-chain -----
+  # --- constants, not credentials; generic-api-key flags them on entropy ---
+  # --- alone. Reviewed and accepted as a false positive. ------------------
+  '''(^|/)app/frontend/src/app/faucet/faucet\.component\.ts$''',
+
+  # --- Documentation, diagrams and captured evidence -----------------------
+  '''(^|/)(README|REPORT|ETHICAL_CLEARANCE)\.md$''',
+  '''(^|/)docs/.*''',
+  '''(^|/)evidence/.*''',
+
+  # --- Lock files: integrity hashes, not credentials -----------------------
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)frontend/package-lock\.json$''',
+]
+
+[[rules]]
+id = "ie3142-jwt-private-key"
+description = "RSA private key assigned to a variable (the V5 finding)"
+regex = '''(?i)(const|let|var)\s+\w*[Kk]ey\w*\s*=\s*['"]-----BEGIN[^-]*PRIVATE KEY-----'''
+tags = ["key", "CWE-798"]
+
+[[rules]]
+id = "ie3142-hardcoded-jwt-signing-secret"
+description = "Hard-coded JWT signing secret"
+regex = '''(?i)jwt\.sign\([^,]+,\s*['"][^'"]{8,}['"]'''
+tags = ["key", "CWE-798"]
+
+[[rules]]
+id = "ie3142-connection-string"
+description = "Database connection string with an inline password"
+regex = '''(?i)(postgres|mysql|mongodb|redis)://[^\s:]+:[^\s@]+@'''
+tags = ["database", "CWE-798"]
+
+[[rules]]
+id = "ie3142-vault-token"
+description = "Hard-coded HashiCorp Vault token"
+regex = '''\bhvs\.[A-Za-z0-9_-]{20,}\b'''
+tags = ["vault", "CWE-798"]

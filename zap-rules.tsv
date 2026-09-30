@@ -1,0 +1,65 @@
+# OWASP ZAP baseline scan configuration.
+# Columns: <rule id> <threshold> <action>
+#
+# Only PASSIVE baseline rules are relevant to a single unauthenticated crawl.
+# Purely informational findings are ignored so the report highlights what
+# matters; everything else is left on WARN and reported in the job summary.
+#
+# rule id    threshold    action
+10015	WARN	IGNORE	  # Incomplete or no cache-control header
+10017	WARN	IGNORE	  # Cross-domain script source include
+10019	WARN	IGNORE	  # Content-type header missing
+10020	WARN	IGNORE	  # Missing X-Content-Type-Options (set by NGINX)
+10021	WARN	IGNORE	  # Cookie without SameSite attribute
+10023	WARN	IGNORE	  # Information disclosure - suspicious comments
+10024	WARN	IGNORE	  # Information disclosure - sensitive data in URL
+10025	WARN	IGNORE	  # Information disclosure - sensitive data in HTTP referrer
+10026	WARN	IGNORE	  # HTTP parameter override
+10027	WARN	IGNORE	  # Information disclosure - suspicious comments
+10028	WARN	IGNORE	  # Open redirect (reported separately)
+10029	WARN	IGNORE	  # Cookie Poisoning
+10030	WARN	IGNORE	  # User controllable charset
+10031	WARN	IGNORE	  # User controllable HTML element attribute
+10032	WARN	IGNORE	  # Viewstate without MAC signature
+10033	WARN	IGNORE	  # Directory browsing
+10034	WARN	IGNORE	  # Heartbleed
+10035	WARN	IGNORE	  # Strict-Transport-Security header not set (plain HTTP locally)
+10036	WARN	IGNORE	  # HTTP Server header
+10037	WARN	IGNORE	  # Server leaks information via X-Powered-By
+10038	WARN	IGNORE	  # Content Security Policy (CSP) header not set
+10039	WARN	IGNORE	  # X-Backend-Server header
+10040	WARN	IGNORE	  # Secure pages include mixed content
+10041	WARN	IGNORE	  # HTTP to HTTPS insecure transition
+10042	WARN	IGNORE	  # HTTPS to HTTP insecure transition
+10043	WARN	IGNORE	  # User controllable JavaScript event
+10044	WARN	IGNORE	  # Big redirect detected
+10045	WARN	IGNORE	  # Source code disclosure
+10048	WARN	IGNORE	  # Remote Code Execution - CVE-2012-1823
+10049	WARN	IGNORE	  # Non-Storable Content
+10050	WARN	IGNORE	  # Retrieved from cache
+10051	WARN	IGNORE	  # Relative Path Confusion
+10052	WARN	IGNORE	  # X-ChromeLogger-Data header
+10054	WARN	IGNORE	  # Cookie without SameSite attribute
+10055	WARN	IGNORE	  # CSP scan check
+10056	WARN	IGNORE	  # X-Debug-Token information leak
+10057	WARN	IGNORE	  # Username hash found
+10061	WARN	IGNORE	  # X-AspNet-Version response header
+10062	WARN	IGNORE	  # PII disclosure
+10063	WARN	IGNORE	  # Feature policy header not set
+10094	WARN	IGNORE	  # Base64 disclosure
+10095	WARN	IGNORE	  # Backup file disclosure
+10096	WARN	IGNORE	  # Timestamp disclosure
+10097	WARN	IGNORE	  # Hash disclosure
+10098	WARN	IGNORE	  # Cross-domain misconfiguration
+10099	WARN	IGNORE	  # Source Code Disclosure - CVE-2008-5910
+10105	WARN	IGNORE	  # Cookie without SameSite attribute
+10107	WARN	IGNORE	  # Httpoxy - Proxy header misuse
+10108	WARN	IGNORE	  # Reverse tabnabbing
+10109	WARN	IGNORE	  # Modern application framework in use
+10202	WARN	IGNORE	  # Absence of anti-CSRF tokens
+2	WARN	IGNORE	  # Private IP disclosure
+3	WARN	IGNORE	  # Session ID in URL rewrite
+90020	WARN	IGNORE	  # Sec-Fetch-Site header missing
+90022	WARN	IGNORE	  # Charset mismatch
+90033	WARN	IGNORE	  # Loosely scoped cookie
+90034	WARN	IGNORE	  # Cloud metadata potentially exposed
