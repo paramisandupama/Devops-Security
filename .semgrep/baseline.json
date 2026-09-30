@@ -1,0 +1,72 @@
+[
+  {
+    "check_id": "javascript.express.security.audit.express-open-redirect.express-open-redirect",
+    "path": "app/routes/redirect.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+    "path": "app/routes/fileServer.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+    "path": "app/routes/keyServer.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+    "path": "app/routes/logfileServer.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+    "path": "app/routes/quarantineServer.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.express.security.audit.possible-user-input-redirect.unknown-value-in-redirect",
+    "path": "app/routes/redirect.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+    "path": "app/routes/userProfile.ts",
+    "severity": "ERROR"
+  },
+  {
+    "check_id": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+    "path": "app/routes/videoHandler.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "semgrep.ie3142-bola-missing-ownership-check",
+    "path": "app/routes/address.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "semgrep.ie3142-bola-missing-ownership-check",
+    "path": "app/routes/basketItems.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "semgrep.ie3142-bola-missing-ownership-check",
+    "path": "app/routes/delivery.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "semgrep.ie3142-bola-missing-ownership-check",
+    "path": "app/routes/payment.ts",
+    "severity": "WARNING"
+  },
+  {
+    "check_id": "semgrep.ie3142-ssrf-unvalidated-fetch",
+    "path": "app/lib/startup/validatePreconditions.ts",
+    "severity": "ERROR"
+  },
+  {
+    "check_id": "semgrep.ie3142-ssrf-unvalidated-fetch",
+    "path": "app/lib/webhook.ts",
+    "severity": "ERROR"
+  }
+]
