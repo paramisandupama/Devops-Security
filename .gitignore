@@ -1,0 +1,32 @@
+# ---- secrets: never commit these ------------------------------------------
+.env
+secrets/
+*.pem
+*.key
+!app/encryptionkeys/jwt.pub
+app/encryptionkeys/*.key
+ctf.key
+
+# ---- dependencies & build output ------------------------------------------
+node_modules/
+build/
+dist/
+frontend/dist/
+frontend/node_modules/
+frontend/.angular/
+*.tsbuildinfo
+
+# ---- local state -----------------------------------------------------------
+data/*.sqlite
+logs/
+coverage/
+.vscode/
+.DS_Store
+
+# ---- scan output -----------------------------------------------------------
+semgrep.sarif
+trivy-image.sarif
+npm-audit.json
+zap-report.*
+bom.json
+evidence/raw/
